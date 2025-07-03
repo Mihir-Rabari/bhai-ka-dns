@@ -1,0 +1,33 @@
+[dns]
+host = "0.0.0.0"
+port = 5353
+upstream_servers = ["8.8.8.8:53", "1.1.1.1:53", "208.67.222.222:53"]
+cache_size = 10000
+cache_ttl = 300
+enable_ai_features = true
+
+[web]
+host = "0.0.0.0"
+port = 8080
+cors_origins = ["*"]
+static_dir = "./frontend/dist"
+
+[database]
+uri = "mongodb://localhost:27017"
+database_name = "bhai_dns"
+max_pool_size = 100
+
+[ai]
+threat_detection = true
+typo_correction = true
+domain_analysis = true
+
+[analytics]
+enabled = true
+retention_days = 30
+metrics_port = 9090
+
+[auth]
+jwt_secret = "your-super-secret-key-change-in-production"
+token_expiry = 3600
+enable_registration = true

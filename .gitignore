@@ -128,3 +128,32 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Rust
+target/
+**/*.rs.bk
+*.pdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local data and logs
+data/
+logs/
+*.log
+
+# Redis
+dump.rdb
+appendonly.aof
+
+# Temporary files
+tmp/
+temp/

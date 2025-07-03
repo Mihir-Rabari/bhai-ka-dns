@@ -3,6 +3,7 @@ use clap::Parser;
 use tokio::signal;
 use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use std::sync::Arc;
 
 mod config;
 mod dns;
@@ -10,7 +11,7 @@ mod web;
 mod ai;
 mod analytics;
 mod db;
-mod auth;
+// mod auth;  // TODO: Implement auth module
 mod errors;
 mod redis;
 
@@ -55,20 +56,23 @@ async fn main() -> Result<()> {
     info!("✅ Database connected");
     
     // Initialize analytics
-    let analytics = analytics::Analytics::new(db.clone()).await?;
+    let analytics = Arc::new(analytics::Analytics::new(db.clone()).await?);
     info!("✅ Analytics initialized");
     
     // Start DNS server
-    let dns_server = DNSServer::new(config.dns.clone(), analytics.clone()).await?;
-    let dns_handle = tokio::spawn(async move {
-        if let Err(e) = dns_server.start().await {
-            warn!("DNS server error: {}", e);
+    let dns_server = Arc::new(DNSServer::new(config.dns.clone(), analytics.clone()).await?);
+    let dns_handle = tokio::spawn({
+        let dns_server = dns_server.clone();
+        async move {
+            if let Err(e) = dns_server.start().await {
+                warn!("DNS server error: {}", e);
+            }
         }
     });
     info!("✅ DNS server started on port {}", config.dns.port);
     
     // Start web server
-    let web_server = WebServer::new(config.web.clone(), db, analytics).await?;
+    let web_server = WebServer::new(config.web.clone(), db, analytics.clone()).await?;
     let web_handle = tokio::spawn(async move {
         if let Err(e) = web_server.start().await {
             warn!("Web server error: {}", e);

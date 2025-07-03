@@ -1,7 +1,8 @@
 use std::time::Duration;
+use std::sync::Arc;
 use bb8::{Pool, PooledConnection};
-use bb8_redis::RedisConnectionManager;
-use redis::{AsyncCommands, RedisResult};
+use bb8_redis::{RedisConnectionManager, redis::AsyncCommands};
+use redis::{RedisResult};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info, warn};
 
@@ -15,6 +16,14 @@ pub type RedisConnection = PooledConnection<'static, RedisConnectionManager>;
 pub struct RedisClient {
     pool: RedisPool,
     key_prefix: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RedisStats {
+    pub total_connections: u32,
+    pub active_connections: u32,
+    pub idle_connections: u32,
+    pub total_keys: u64,
 }
 
 impl RedisClient {
@@ -336,6 +345,65 @@ impl RedisClient {
         let key = format!("stats:{}:{}", metric, timestamp / 300); // 5-minute buckets
         
         self.increment(&key, Some(3600)).await?; // Keep for 1 hour
+        Ok(())
+    }
+}
+
+impl RedisClient {
+    pub async fn get_stats(&self) -> Result<RedisStats> {
+        let state = self.pool.state();
+        
+        Ok(RedisStats {
+            total_connections: state.connections,
+            active_connections: state.connections - state.idle_connections,
+            idle_connections: state.idle_connections,
+            total_keys: 0, // Would need INFO command to get this
+        })
+    }
+
+    pub async fn increment_with_window(&self, key: &str, window_seconds: u64) -> Result<i64> {
+        let mut conn = self.pool.get().await?;
+        let prefixed_key = self.prefixed_key(key);
+
+        let current_count: i64 = conn
+            .incr(prefixed_key.clone(), 1)
+            .await
+            .map_err(|e| AppError::Redis(e.to_string()))?;
+
+        if current_count == 1 {
+            conn.expire(prefixed_key, window_seconds as usize)
+                .await
+                .map_err(|e| AppError::Redis(e.to_string()))?;
+        }
+
+        debug!("Incremented with window: {} = {} ({}s window)", key, current_count, window_seconds);
+        Ok(current_count)
+    }
+
+    pub async fn increment_domain_queries(&self, domain: &str) -> Result<i64> {
+        let key = format!("stats:domain:{}", domain);
+        self.increment(&key, Some(86400)).await // 24 hour TTL
+    }
+
+    pub async fn track_client_queries(&self, client_ip: &str, window_seconds: u64) -> Result<i64> {
+        let key = format!("rate_limit:{}", client_ip);
+        self.increment_with_window(&key, window_seconds).await
+    }
+
+    pub async fn record_threat(&self, domain: &str, threat_type: &str) -> Result<()> {
+        let key = format!("threats:{}:{}", threat_type, domain);
+        self.set_add(&key, domain, Some(3600)).await?; // 1 hour TTL
+        Ok(())
+    }
+
+    pub async fn is_domain_blocked(&self, domain: &str) -> Result<bool> {
+        self.set_is_member("blocked_domains", domain).await
+    }
+
+    pub async fn update_metrics(&self, metric: &str, _value: i64) -> Result<()> {
+        // Placeholder for metrics updates
+        let key = format!("metrics:{}", metric);
+        self.increment(&key, Some(300)).await?; // 5 minute TTL
         Ok(())
     }
 }

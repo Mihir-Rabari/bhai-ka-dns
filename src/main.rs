@@ -12,6 +12,7 @@ mod analytics;
 mod db;
 mod auth;
 mod errors;
+mod redis;
 
 use config::Config;
 use dns::DNSServer;

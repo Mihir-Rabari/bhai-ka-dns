@@ -43,3 +43,6 @@ base64 = "0.21"
 jsonwebtoken = "9.2"
 bcrypt = "0.15"
 toml = "0.8"
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
+bb8 = "0.8"
+bb8-redis = "0.13"

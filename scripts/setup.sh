@@ -76,9 +76,63 @@ scrape_configs:
   - job_name: 'bhai-dns'
     static_configs:
       - targets: ['bhai-dns-backend:9090']
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+EOF
+
+    # Create Redis config
+    cat > redis.conf << EOF
+# Redis configuration for Bhai Ka DNS
+bind 0.0.0.0
+port 6379
+daemonize no
+timeout 300
+tcp-keepalive 60
+loglevel notice
+databases 16
+save 900 1
+save 300 10
+save 60 10000
+stop-writes-on-bgsave-error yes
+rdbcompression yes
+dbfilename dump.rdb
+dir /data
+maxmemory 512mb
+maxmemory-policy allkeys-lru
+appendonly yes
+appendfilename "appendonly.aof"
+appendfsync everysec
 EOF
     
     echo "✅ Environment setup complete!"
+}
+
+# Load datasets
+load_datasets() {
+    echo "📊 Loading datasets for enhanced DNS functionality..."
+    
+    # Run the dataset loader script
+    if [ -f "scripts/load-datasets.sh" ]; then
+        chmod +x scripts/load-datasets.sh
+        ./scripts/load-datasets.sh
+    else
+        echo "⚠️ Dataset loader script not found, creating sample data..."
+        mkdir -p data/{threats,typos,popular}
+        
+        # Create minimal sample data
+        echo "malware.com" > data/threats/sample-threats.txt
+        echo "phishing.net" >> data/threats/sample-threats.txt
+        echo "spam.org" >> data/threats/sample-threats.txt
+        
+        echo '{"google.com": ["gogle.com", "googel.com"]}' > data/typos/common-typos.json
+        
+        echo "google.com" > data/popular/top-domains.txt
+        echo "youtube.com" >> data/popular/top-domains.txt
+        echo "facebook.com" >> data/popular/top-domains.txt
+        
+        echo "✅ Sample datasets created"
+    fi
 }
 
 # Build and start services
@@ -157,6 +211,7 @@ show_access_info() {
 main() {
     check_prerequisites
     setup_environment
+    load_datasets
     start_services
     verify_installation
     show_access_info

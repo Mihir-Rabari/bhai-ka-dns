@@ -7,9 +7,11 @@ pub struct Config {
     pub dns: DNSConfig,
     pub web: WebConfig,
     pub database: DatabaseConfig,
+    pub redis: RedisConfig,
     pub ai: AIConfig,
     pub analytics: AnalyticsConfig,
     pub auth: AuthConfig,
+    pub performance: PerformanceConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,6 +61,23 @@ pub struct AuthConfig {
     pub enable_registration: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RedisConfig {
+    pub uri: String,
+    pub db: u8,
+    pub max_connections: u32,
+    pub key_prefix: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerformanceConfig {
+    pub worker_threads: usize,
+    pub connection_timeout: u64,
+    pub query_timeout: u64,
+    pub max_connections: u32,
+    pub rate_limit_per_minute: u32,
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -99,6 +118,19 @@ impl Default for Config {
                 jwt_secret: "your-secret-key-change-in-production".to_string(),
                 token_expiry: 3600,
                 enable_registration: true,
+            },
+            redis: RedisConfig {
+                uri: "redis://localhost:6379".to_string(),
+                db: 0,
+                max_connections: 50,
+                key_prefix: "bhai_dns:".to_string(),
+            },
+            performance: PerformanceConfig {
+                worker_threads: 0,
+                connection_timeout: 30,
+                query_timeout: 5,
+                max_connections: 10000,
+                rate_limit_per_minute: 1000,
             },
         }
     }

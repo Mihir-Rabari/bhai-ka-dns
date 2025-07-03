@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bhai-dns-backend
+  namespace: bhai-dns
+  labels:
+    app: bhai-dns-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: bhai-dns-backend
+  template:
+    metadata:
+      labels:
+        app: bhai-dns-backend
+    spec:
+      containers:
+      - name: bhai-dns-backend
+        image: bhai-dns-backend:latest
+        ports:
+        - containerPort: 5353
+          protocol: UDP
+        - containerPort: 8080
+        - containerPort: 9090
+        env:
+        - name: DATABASE_URI
+          value: "mongodb://admin:password@mongodb-service:27017/bhai_dns?authSource=admin"
+        - name: RUST_LOG
+          value: "info"
+        volumeMounts:
+        - name: config
+          mountPath: /app/config.toml
+          subPath: config.toml
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: bhai-dns-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bhai-dns-backend-api
+  namespace: bhai-dns
+  labels:
+    app: bhai-dns-backend
+spec:
+  selector:
+    app: bhai-dns-backend
+  ports:
+  - name: api
+    port: 8080
+    targetPort: 8080
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bhai-dns-backend-dns
+  namespace: bhai-dns
+  labels:
+    app: bhai-dns-backend
+spec:
+  selector:
+    app: bhai-dns-backend
+  ports:
+  - name: dns
+    port: 5353
+    targetPort: 5353
+    protocol: UDP
+  type: LoadBalancer
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: bhai-dns-backend-ingress
+  namespace: bhai-dns
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - api.bhaidns.com
+    secretName: bhai-dns-api-tls
+  rules:
+  - host: api.bhaidns.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: bhai-dns-backend-api
+            port:
+              number: 8080

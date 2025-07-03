@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bhai-dns
+  labels:
+    name: bhai-dns
+    app: bhai-ka-dns

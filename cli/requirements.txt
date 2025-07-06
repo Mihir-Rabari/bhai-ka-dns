@@ -1,0 +1,7 @@
+rich>=13.0.0
+PyYAML>=6.0
+boto3>=1.28.0
+click>=8.0.0
+requests>=2.31.0
+kubernetes>=27.0.0
+pathlib2>=2.3.0

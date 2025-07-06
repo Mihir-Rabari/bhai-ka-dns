@@ -1,6 +1,60 @@
 version: '3.8'
 
 services:
+  # ClickHouse for Analytics
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: bhai-dns-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: dns_analytics
+      CLICKHOUSE_USER: admin
+      CLICKHOUSE_PASSWORD: password
+    ports:
+      - "8123:8123"  # HTTP interface
+      - "9000:9000"  # Native interface
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./config/clickhouse:/etc/clickhouse-server/config.d
+    networks:
+      - bhai-dns-network
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+  # Kafka for Event Streaming
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: bhai-dns-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper
+    networks:
+      - bhai-dns-network
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: bhai-dns-kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - bhai-dns-network
+
   # MongoDB Database
   mongodb:
     image: mongo:7.0
@@ -18,7 +72,7 @@ services:
     networks:
       - bhai-dns-network
 
-  # Rust Backend
+  # Enhanced Rust Backend with Kafka and ClickHouse
   bhai-dns-backend:
     build:
       context: .
@@ -27,6 +81,11 @@ services:
     restart: unless-stopped
     environment:
       - DATABASE_URI=mongodb://admin:password@mongodb:27017/bhai_dns?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - KAFKA_BROKERS=kafka:9092
+      - CLICKHOUSE_URL=http://clickhouse:8123
+      - CLICKHOUSE_USER=admin
+      - CLICKHOUSE_PASSWORD=password
       - RUST_LOG=info
     ports:
       - "5353:5353/udp"  # DNS Server
@@ -34,6 +93,9 @@ services:
       - "9090:9090"      # Metrics
     depends_on:
       - mongodb
+      - redis
+      - kafka
+      - clickhouse
     volumes:
       - ./config.toml:/app/config.toml:ro
     networks:
@@ -122,5 +184,8 @@ networks:
 volumes:
   mongodb_data:
   redis_data:
+  clickhouse_data:
+  kafka_data:
+  zookeeper_data:
   prometheus_data:
   grafana_data:
